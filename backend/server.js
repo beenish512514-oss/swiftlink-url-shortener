@@ -168,4 +168,5 @@ app.get('/:code', async (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server is happily running on port: ${PORT}`);
+    module.exports = app; // Export for Vercel Serverless hosting
 });
