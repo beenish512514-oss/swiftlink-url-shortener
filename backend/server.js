@@ -14,10 +14,39 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB Atlas
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('MongoDB Cloud Database connected successfully! 🎉'))
-    .catch((err) => console.error('Database connection error ❌:', err));
+// --- OPTIMIZED SERVERLESS MONGODB CONNECTION POOL ---
+let isConnected = false; // Track connection state globally
+
+const connectToDatabase = async () => {
+    if (isConnected) {
+        console.log('=> Using existing database connection pool.');
+        return;
+    }
+
+    console.log('=> Creating new database connection pool...');
+    try {
+        const db = await mongoose.connect(process.env.MONGO_URI, {
+            serverSelectionTimeoutMS: 8000, // Fail quickly if connection stalls instead of hanging
+            socketTimeoutMS: 45000,        // Close inactive sockets smoothly
+        });
+        
+        isConnected = db.connections[0].readyState;
+        console.log('MongoDB Cloud Database connected successfully! 🎉');
+    } catch (err) {
+        console.error('Database connection error ❌:', err);
+        throw err;
+    }
+};
+
+// Middleware to ensure database connection is established before processing any API requests
+app.use(async (req, res, next) => {
+    try {
+        await connectToDatabase();
+        next();
+    } catch (error) {
+        return res.status(500).json({ error: 'Database handshake connection failure' });
+    }
+});
 
 // --- API ROUTES ---
 
@@ -168,5 +197,6 @@ app.get('/:code', async (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server is happily running on port: ${PORT}`);
-    module.exports = app; // Export for Vercel Serverless hosting
 });
+
+module.exports = app; // Export for Vercel Serverless hosting
